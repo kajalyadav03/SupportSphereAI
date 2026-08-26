@@ -34,24 +34,26 @@ const getDashboardStats = async (req, res) => {
       isDeleted: false,
     });
 
-    const inProgressTickets = await Ticket.countDocuments({
-      company: companyId,
-      status: "in-progress",
-      isDeleted: false,
-    });
+    const inProgressTickets =
+      await Ticket.countDocuments({
+        company: companyId,
+        status: "in-progress",
+        isDeleted: false,
+      });
 
-    const resolvedTickets = await Ticket.countDocuments({
-      company: companyId,
-      status: "resolved",
-      isDeleted: false,
-    });
+    const resolvedTickets =
+      await Ticket.countDocuments({
+        company: companyId,
+        status: "resolved",
+        isDeleted: false,
+      });
 
-    const closedTickets = await Ticket.countDocuments({
-      company: companyId,
-      status: "closed",
-      isDeleted: false,
-    });
-
+    const closedTickets =
+      await Ticket.countDocuments({
+        company: companyId,
+        status: "closed",
+        isDeleted: false,
+      });
 
     // ==========================================
     // PRIORITY COUNTS
@@ -71,7 +73,6 @@ const getDashboardStats = async (req, res) => {
         isDeleted: false,
       });
 
-
     // ==========================================
     // CUSTOMER COUNT
     // ==========================================
@@ -80,7 +81,6 @@ const getDashboardStats = async (req, res) => {
       await Customer.countDocuments({
         company: companyId,
       });
-
 
     // ==========================================
     // AGENT COUNT
@@ -92,6 +92,95 @@ const getDashboardStats = async (req, res) => {
         role: "agent",
       });
 
+    // ==========================================
+    // AI CATEGORY COUNTS
+    // ==========================================
+
+    const technicalTickets =
+      await Ticket.countDocuments({
+        company: companyId,
+        category: "technical",
+        isDeleted: false,
+      });
+
+    const billingTickets =
+      await Ticket.countDocuments({
+        company: companyId,
+        category: "billing",
+        isDeleted: false,
+      });
+
+    const accountTickets =
+      await Ticket.countDocuments({
+        company: companyId,
+        category: "account",
+        isDeleted: false,
+      });
+
+    const generalTickets =
+      await Ticket.countDocuments({
+        company: companyId,
+        category: "general",
+        isDeleted: false,
+      });
+
+    const otherTickets =
+      await Ticket.countDocuments({
+        company: companyId,
+        category: "other",
+        isDeleted: false,
+      });
+
+    // ==========================================
+    // AI SENTIMENT COUNTS
+    // ==========================================
+
+    const positiveSentimentTickets =
+      await Ticket.countDocuments({
+        company: companyId,
+        sentiment: "positive",
+        isDeleted: false,
+      });
+
+    const neutralSentimentTickets =
+      await Ticket.countDocuments({
+        company: companyId,
+        sentiment: "neutral",
+        isDeleted: false,
+      });
+
+    const negativeSentimentTickets =
+      await Ticket.countDocuments({
+        company: companyId,
+        sentiment: "negative",
+        isDeleted: false,
+      });
+
+    // ==========================================
+    // AI SMART ALERT COUNT
+    // ==========================================
+
+    /*
+     * Smart alert:
+     *
+     * 1. Urgent ticket
+     * OR
+     * 2. Negative sentiment
+     */
+
+    const smartAlertTickets =
+      await Ticket.countDocuments({
+        company: companyId,
+        isDeleted: false,
+        $or: [
+          {
+            priority: "urgent",
+          },
+          {
+            sentiment: "negative",
+          },
+        ],
+      });
 
     // ==========================================
     // AGENT-WISE TICKET STATISTICS
@@ -108,6 +197,7 @@ const getDashboardStats = async (req, res) => {
       {
         $lookup: {
           from: "tickets",
+
           let: {
             agentId: "$_id",
           },
@@ -123,12 +213,14 @@ const getDashboardStats = async (req, res) => {
                         "$$agentId",
                       ],
                     },
+
                     {
                       $eq: [
                         "$company",
                         companyId,
                       ],
                     },
+
                     {
                       $eq: [
                         "$isDeleted",
@@ -151,6 +243,7 @@ const getDashboardStats = async (req, res) => {
           agentId: "$_id",
           name: 1,
           email: 1,
+
           tickets: {
             $size: "$tickets",
           },
@@ -163,7 +256,6 @@ const getDashboardStats = async (req, res) => {
         },
       },
     ]);
-
 
     // ==========================================
     // RESPONSE
@@ -190,6 +282,28 @@ const getDashboardStats = async (req, res) => {
       agents: {
         total: totalAgents,
         statistics: agentStats,
+      },
+
+      // ==========================================
+      // AI INSIGHTS
+      // ==========================================
+
+      aiInsights: {
+        categories: {
+          technical: technicalTickets,
+          billing: billingTickets,
+          account: accountTickets,
+          general: generalTickets,
+          other: otherTickets,
+        },
+
+        sentiment: {
+          positive: positiveSentimentTickets,
+          neutral: neutralSentimentTickets,
+          negative: negativeSentimentTickets,
+        },
+
+        smartAlerts: smartAlertTickets,
       },
     });
 
@@ -270,23 +384,27 @@ const getRecentActivities = async (req, res) => {
       });
     }
 
-    const activities = await TicketActivity.find({
-      company: user.company,
-    })
-      .populate(
-        "user",
-        "name email role"
-      )
-      .populate(
-        "ticket",
-        "title status isDeleted"
-      )
-      .sort({
-        createdAt: -1,
+    const activities =
+      await TicketActivity.find({
+        company: user.company,
       })
-      .limit(10);
+        .populate(
+          "user",
+          "name email role"
+        )
+        .populate(
+          "ticket",
+          "title status priority category sentiment isDeleted"
+        )
+        .sort({
+          createdAt: -1,
+        })
+        .limit(10);
 
-    // Remove activities whose ticket has been deleted
+    // ==========================================
+    // REMOVE DELETED TICKET ACTIVITIES
+    // ==========================================
+
     const activeActivities =
       activities.filter(
         (activity) =>

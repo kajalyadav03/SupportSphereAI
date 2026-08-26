@@ -21,11 +21,21 @@ const createTicket = async (req, res) => {
       });
     }
 
-    const { title, description, priority, customer } = req.body;
+    const {
+      title,
+      description,
+      priority,
+      customer,
+    } = req.body;
+
+    // ==========================================
+    // VALIDATION
+    // ==========================================
 
     if (!title || !description || !customer) {
       return res.status(400).json({
-        message: "Title, description and customer are required",
+        message:
+          "Title, description and customer are required",
       });
     }
 
@@ -51,6 +61,10 @@ const createTicket = async (req, res) => {
       });
     }
 
+    // ==========================================
+    // CHECK CUSTOMER
+    // ==========================================
+
     const existingCustomer = await Customer.findOne({
       _id: customer,
       company: user.company,
@@ -62,14 +76,24 @@ const createTicket = async (req, res) => {
       });
     }
 
+    // ==========================================
+    // CREATE TICKET
+    // ==========================================
+
     const ticket = await Ticket.create({
       title: title.trim(),
       description: description.trim(),
       priority: priority || "medium",
+      category: "general",
+      sentiment: "neutral",
       customer,
       company: user.company,
       createdBy: user._id,
     });
+
+    // ==========================================
+    // CREATE ACTIVITY
+    // ==========================================
 
     await createTicketActivity({
       ticketId: ticket._id,
@@ -79,12 +103,311 @@ const createTicket = async (req, res) => {
       description: "Ticket was created",
     });
 
+    // ==========================================
+    // AUTOMATIC AI ANALYSIS
+    // ==========================================
+
+    try {
+      const aiServiceUrl =
+        process.env.AI_SERVICE_URL ||
+        "http://127.0.0.1:8000";
+
+      const aiResponse = await fetch(
+        `${aiServiceUrl}/ai/analyze-ticket`,
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type": "application/json",
+          },
+
+          body: JSON.stringify({
+            title: ticket.title,
+            description: ticket.description,
+          }),
+        }
+      );
+
+      // ==========================================
+      // AI RESPONSE ERROR
+      // ==========================================
+
+      if (!aiResponse.ok) {
+        const aiError =
+          await aiResponse.text();
+
+        console.error(
+          "AI service error:",
+          aiError
+        );
+      } else {
+        const aiData =
+          await aiResponse.json();
+
+        const analysis =
+          aiData.analysis || aiData;
+
+        // ==========================================
+        // ALLOWED VALUES
+        // ==========================================
+
+        const allowedCategories = [
+          "technical",
+          "billing",
+          "account",
+          "general",
+          "other",
+        ];
+
+        const allowedSentiments = [
+          "positive",
+          "neutral",
+          "negative",
+        ];
+
+        // ==========================================
+        // NORMALIZE CATEGORY
+        // ==========================================
+
+        const rawCategory =
+          analysis.category
+            ?.toString()
+            .trim()
+            .toLowerCase();
+
+        let aiCategory = "general";
+
+        if (
+          rawCategory === "technical" ||
+          rawCategory?.includes("technical") ||
+          rawCategory?.includes("bug") ||
+          rawCategory?.includes("software") ||
+          rawCategory?.includes("hardware")
+        ) {
+          aiCategory = "technical";
+        } else if (
+          rawCategory === "billing" ||
+          rawCategory?.includes("billing") ||
+          rawCategory?.includes("payment") ||
+          rawCategory?.includes("invoice") ||
+          rawCategory?.includes("refund") ||
+          rawCategory?.includes("charge")
+        ) {
+          aiCategory = "billing";
+        } else if (
+          rawCategory === "account" ||
+          rawCategory?.includes("account") ||
+          rawCategory?.includes("login") ||
+          rawCategory?.includes("password") ||
+          rawCategory?.includes("profile")
+        ) {
+          aiCategory = "account";
+        } else if (
+          rawCategory === "other" ||
+          rawCategory?.includes("other")
+        ) {
+          aiCategory = "other";
+        } else if (
+          rawCategory === "general" ||
+          rawCategory?.includes("general") ||
+          rawCategory?.includes("inquiry") ||
+          rawCategory?.includes("question") ||
+          rawCategory?.includes("information")
+        ) {
+          aiCategory = "general";
+        }
+
+        // ==========================================
+        // NORMALIZE PRIORITY
+        // ==========================================
+
+        const rawPriority =
+          analysis.priority
+            ?.toString()
+            .trim()
+            .toLowerCase();
+
+        let aiPriority = null;
+
+        if (
+          rawPriority === "urgent" ||
+          rawPriority?.includes("urgent") ||
+          rawPriority?.includes("critical") ||
+          rawPriority?.includes("emergency")
+        ) {
+          aiPriority = "urgent";
+        } else if (
+          rawPriority === "high" ||
+          rawPriority?.includes("high")
+        ) {
+          aiPriority = "high";
+        } else if (
+          rawPriority === "medium" ||
+          rawPriority?.includes("medium") ||
+          rawPriority?.includes("moderate") ||
+          rawPriority?.includes("normal")
+        ) {
+          aiPriority = "medium";
+        } else if (
+          rawPriority === "low" ||
+          rawPriority?.includes("low")
+        ) {
+          aiPriority = "low";
+        }
+
+        // ==========================================
+        // NORMALIZE SENTIMENT
+        // ==========================================
+
+        const rawSentiment =
+          analysis.sentiment
+            ?.toString()
+            .trim()
+            .toLowerCase();
+
+        let aiSentiment = "neutral";
+
+        if (
+          rawSentiment === "positive" ||
+          rawSentiment?.includes("positive") ||
+          rawSentiment?.includes("happy") ||
+          rawSentiment?.includes("satisfied")
+        ) {
+          aiSentiment = "positive";
+        } else if (
+          rawSentiment === "negative" ||
+          rawSentiment?.includes("negative") ||
+          rawSentiment?.includes("angry") ||
+          rawSentiment?.includes("frustrated") ||
+          rawSentiment?.includes("upset") ||
+          rawSentiment?.includes("dissatisfied")
+        ) {
+          aiSentiment = "negative";
+        } else if (
+          rawSentiment === "neutral" ||
+          rawSentiment?.includes("neutral")
+        ) {
+          aiSentiment = "neutral";
+        }
+
+        // ==========================================
+        // APPLY AI CATEGORY
+        // ==========================================
+
+        if (
+          allowedCategories.includes(
+            aiCategory
+          )
+        ) {
+          ticket.category = aiCategory;
+        }
+
+        // ==========================================
+        // APPLY AI PRIORITY
+        // ==========================================
+
+        /*
+         * If user manually selected priority,
+         * preserve it.
+         *
+         * Otherwise AI priority is applied.
+         */
+
+        if (
+          !priority &&
+          aiPriority &&
+          allowedPriorities.includes(
+            aiPriority
+          )
+        ) {
+          ticket.priority = aiPriority;
+        }
+
+        // ==========================================
+        // APPLY AI SENTIMENT
+        // ==========================================
+
+        if (
+          allowedSentiments.includes(
+            aiSentiment
+          )
+        ) {
+          ticket.sentiment = aiSentiment;
+        }
+
+        // ==========================================
+        // SAVE AI DATA
+        // ==========================================
+
+        await ticket.save();
+
+        // ==========================================
+        // AI LOG
+        // ==========================================
+
+        console.log(
+          "AI analysis applied successfully:",
+          {
+            ticketId:
+              ticket._id.toString(),
+
+            category:
+              ticket.category,
+
+            priority:
+              ticket.priority,
+
+            sentiment:
+              ticket.sentiment,
+          }
+        );
+      }
+
+    } catch (aiError) {
+      // ==========================================
+      // AI FAILURE SHOULD NOT FAIL TICKET
+      // ==========================================
+
+      console.error(
+        "Automatic AI analysis failed:",
+        aiError.message
+      );
+    }
+
+    // ==========================================
+    // POPULATE TICKET
+    // ==========================================
+
+    await ticket.populate(
+      "customer",
+      "name email phone"
+    );
+
+    await ticket.populate(
+      "assignedTo",
+      "name email role"
+    );
+
+    await ticket.populate(
+      "createdBy",
+      "name email role"
+    );
+
+    // ==========================================
+    // RESPONSE
+    // ==========================================
+
     res.status(201).json({
-      message: "Ticket created successfully",
+      message:
+        "Ticket created successfully",
       ticket,
     });
+
   } catch (error) {
-    console.error("Create ticket error:", error);
+    console.error(
+      "Create ticket error:",
+      error
+    );
 
     res.status(500).json({
       message: "Server error",
@@ -107,7 +430,11 @@ const getTickets = async (req, res) => {
       });
     }
 
-    const { status, priority, search } = req.query;
+    const {
+      status,
+      priority,
+      search,
+    } = req.query;
 
     const page = Math.max(
       parseInt(req.query.page) || 1,
@@ -115,7 +442,10 @@ const getTickets = async (req, res) => {
     );
 
     const limit = Math.min(
-      Math.max(parseInt(req.query.limit) || 10, 1),
+      Math.max(
+        parseInt(req.query.limit) || 10,
+        1
+      ),
       100
     );
 
@@ -126,6 +456,10 @@ const getTickets = async (req, res) => {
       isDeleted: false,
     };
 
+    // ==========================================
+    // STATUS FILTER
+    // ==========================================
+
     const allowedStatuses = [
       "open",
       "in-progress",
@@ -133,15 +467,10 @@ const getTickets = async (req, res) => {
       "closed",
     ];
 
-    const allowedPriorities = [
-      "low",
-      "medium",
-      "high",
-      "urgent",
-    ];
-
     if (status) {
-      if (!allowedStatuses.includes(status)) {
+      if (
+        !allowedStatuses.includes(status)
+      ) {
         return res.status(400).json({
           message: "Invalid status",
         });
@@ -150,8 +479,21 @@ const getTickets = async (req, res) => {
       filter.status = status;
     }
 
+    // ==========================================
+    // PRIORITY FILTER
+    // ==========================================
+
+    const allowedPriorities = [
+      "low",
+      "medium",
+      "high",
+      "urgent",
+    ];
+
     if (priority) {
-      if (!allowedPriorities.includes(priority)) {
+      if (
+        !allowedPriorities.includes(priority)
+      ) {
         return res.status(400).json({
           message: "Invalid priority",
         });
@@ -159,6 +501,10 @@ const getTickets = async (req, res) => {
 
       filter.priority = priority;
     }
+
+    // ==========================================
+    // SEARCH
+    // ==========================================
 
     if (search && search.trim()) {
       filter.$or = [
@@ -177,11 +523,26 @@ const getTickets = async (req, res) => {
       ];
     }
 
+    // ==========================================
+    // GET TICKETS
+    // ==========================================
+
     const tickets = await Ticket.find(filter)
-      .populate("customer", "name email phone")
-      .populate("assignedTo", "name email role")
-      .populate("createdBy", "name email role")
-      .sort({ createdAt: -1 })
+      .populate(
+        "customer",
+        "name email phone"
+      )
+      .populate(
+        "assignedTo",
+        "name email role"
+      )
+      .populate(
+        "createdBy",
+        "name email role"
+      )
+      .sort({
+        createdAt: -1,
+      })
       .skip(skip)
       .limit(limit);
 
@@ -190,6 +551,7 @@ const getTickets = async (req, res) => {
 
     res.status(200).json({
       tickets,
+
       pagination: {
         page,
         limit,
@@ -199,8 +561,12 @@ const getTickets = async (req, res) => {
         ),
       },
     });
+
   } catch (error) {
-    console.error("Get tickets error:", error);
+    console.error(
+      "Get tickets error:",
+      error
+    );
 
     res.status(500).json({
       message: "Server error",
@@ -227,16 +593,31 @@ const getMyTickets = async (req, res) => {
       assignedTo: user._id,
       isDeleted: false,
     })
-      .populate("customer", "name email phone")
-      .populate("assignedTo", "name email role")
-      .populate("createdBy", "name email role")
-      .sort({ createdAt: -1 });
+      .populate(
+        "customer",
+        "name email phone"
+      )
+      .populate(
+        "assignedTo",
+        "name email role"
+      )
+      .populate(
+        "createdBy",
+        "name email role"
+      )
+      .sort({
+        createdAt: -1,
+      });
 
     res.status(200).json({
       tickets,
     });
+
   } catch (error) {
-    console.error("Get my tickets error:", error);
+    console.error(
+      "Get my tickets error:",
+      error
+    );
 
     res.status(500).json({
       message: "Server error",
@@ -261,13 +642,19 @@ const getAgents = async (req, res) => {
     const agents = await User.find({
       company: user.company,
       role: "agent",
-    }).select("name email role");
+    }).select(
+      "name email role"
+    );
 
     res.status(200).json({
       agents,
     });
+
   } catch (error) {
-    console.error("Get agents error:", error);
+    console.error(
+      "Get agents error:",
+      error
+    );
 
     res.status(500).json({
       message: "Server error",
@@ -289,7 +676,11 @@ const getTicketById = async (req, res) => {
       });
     }
 
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    if (
+      !mongoose.Types.ObjectId.isValid(
+        req.params.id
+      )
+    ) {
       return res.status(400).json({
         message: "Invalid ticket ID",
       });
@@ -300,9 +691,18 @@ const getTicketById = async (req, res) => {
       company: user.company,
       isDeleted: false,
     })
-      .populate("customer", "name email phone")
-      .populate("assignedTo", "name email role")
-      .populate("createdBy", "name email role");
+      .populate(
+        "customer",
+        "name email phone"
+      )
+      .populate(
+        "assignedTo",
+        "name email role"
+      )
+      .populate(
+        "createdBy",
+        "name email role"
+      );
 
     if (!ticket) {
       return res.status(404).json({
@@ -313,8 +713,12 @@ const getTicketById = async (req, res) => {
     res.status(200).json({
       ticket,
     });
+
   } catch (error) {
-    console.error("Get ticket error:", error);
+    console.error(
+      "Get ticket error:",
+      error
+    );
 
     res.status(500).json({
       message: "Server error",
@@ -336,7 +740,11 @@ const updateTicket = async (req, res) => {
       });
     }
 
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    if (
+      !mongoose.Types.ObjectId.isValid(
+        req.params.id
+      )
+    ) {
       return res.status(400).json({
         message: "Invalid ticket ID",
       });
@@ -411,7 +819,8 @@ const updateTicket = async (req, res) => {
     }
 
     if (description !== undefined) {
-      ticket.description = description.trim();
+      ticket.description =
+        description.trim();
     }
 
     if (status !== undefined) {
@@ -435,7 +844,10 @@ const updateTicket = async (req, res) => {
           : "Ticket was updated",
     });
 
-    // Notify assigned agent only if someone else updated it
+    // ==========================================
+    // NOTIFY ASSIGNED AGENT
+    // ==========================================
+
     if (
       ticket.assignedTo &&
       ticket.assignedTo.toString() !==
@@ -466,11 +878,16 @@ const updateTicket = async (req, res) => {
     );
 
     res.status(200).json({
-      message: "Ticket updated successfully",
+      message:
+        "Ticket updated successfully",
       ticket,
     });
+
   } catch (error) {
-    console.error("Update ticket error:", error);
+    console.error(
+      "Update ticket error:",
+      error
+    );
 
     res.status(500).json({
       message: "Server error",
@@ -500,13 +917,19 @@ const assignTicket = async (req, res) => {
       });
     }
 
-    if (!mongoose.Types.ObjectId.isValid(agentId)) {
+    if (
+      !mongoose.Types.ObjectId.isValid(agentId)
+    ) {
       return res.status(400).json({
         message: "Invalid agent ID",
       });
     }
 
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    if (
+      !mongoose.Types.ObjectId.isValid(
+        req.params.id
+      )
+    ) {
       return res.status(400).json({
         message: "Invalid ticket ID",
       });
@@ -536,7 +959,8 @@ const assignTicket = async (req, res) => {
       });
     }
 
-    const previousAgent = ticket.assignedTo;
+    const previousAgent =
+      ticket.assignedTo;
 
     ticket.assignedTo = agent._id;
 
@@ -550,9 +974,13 @@ const assignTicket = async (req, res) => {
       description: `Ticket assigned to ${agent.name}`,
     });
 
-    // Notify new agent
+    // ==========================================
+    // NOTIFY NEW AGENT
+    // ==========================================
+
     if (
-      agent._id.toString() !== user._id.toString()
+      agent._id.toString() !==
+      user._id.toString()
     ) {
       await createNotification({
         userId: agent._id,
@@ -563,7 +991,10 @@ const assignTicket = async (req, res) => {
       });
     }
 
-    // Notify previous agent if ticket was reassigned
+    // ==========================================
+    // NOTIFY PREVIOUS AGENT
+    // ==========================================
+
     if (
       previousAgent &&
       previousAgent.toString() !==
@@ -586,11 +1017,16 @@ const assignTicket = async (req, res) => {
     );
 
     res.status(200).json({
-      message: "Ticket assigned successfully",
+      message:
+        "Ticket assigned successfully",
       ticket,
     });
+
   } catch (error) {
-    console.error("Assign ticket error:", error);
+    console.error(
+      "Assign ticket error:",
+      error
+    );
 
     res.status(500).json({
       message: "Server error",
@@ -612,7 +1048,11 @@ const deleteTicket = async (req, res) => {
       });
     }
 
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    if (
+      !mongoose.Types.ObjectId.isValid(
+        req.params.id
+      )
+    ) {
       return res.status(400).json({
         message: "Invalid ticket ID",
       });
@@ -643,10 +1083,15 @@ const deleteTicket = async (req, res) => {
     });
 
     res.status(200).json({
-      message: "Ticket deleted successfully",
+      message:
+        "Ticket deleted successfully",
     });
+
   } catch (error) {
-    console.error("Delete ticket error:", error);
+    console.error(
+      "Delete ticket error:",
+      error
+    );
 
     res.status(500).json({
       message: "Server error",
@@ -654,6 +1099,10 @@ const deleteTicket = async (req, res) => {
   }
 };
 
+
+// ==========================================
+// EXPORT
+// ==========================================
 
 module.exports = {
   createTicket,

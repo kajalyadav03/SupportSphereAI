@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 import api from "../services/api";
 
+
 function TicketDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -20,9 +21,23 @@ function TicketDetails() {
   const [status, setStatus] = useState("");
   const [priority, setPriority] = useState("");
 
+  // ==========================================
+  // AI STATE
+  // ==========================================
+
+  const [aiAnalysis, setAiAnalysis] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState("");
+  const [aiApplyLoading, setAiApplyLoading] = useState(false);
+
   const user = JSON.parse(
     localStorage.getItem("user") || "null"
   );
+
+
+  // ==========================================
+  // LOAD TICKET
+  // ==========================================
 
   const loadTicket = async () => {
     try {
@@ -33,6 +48,7 @@ function TicketDetails() {
       setTicket(data.ticket);
       setStatus(data.ticket.status);
       setPriority(data.ticket.priority);
+
     } catch (error) {
       setError(
         error.message ||
@@ -41,6 +57,11 @@ function TicketDetails() {
     }
   };
 
+
+  // ==========================================
+  // LOAD COMMENTS
+  // ==========================================
+
   const loadComments = async () => {
     try {
       const data = await api.get(
@@ -48,6 +69,7 @@ function TicketDetails() {
       );
 
       setComments(data.comments || []);
+
     } catch (error) {
       console.error(
         "Comments error:",
@@ -56,13 +78,21 @@ function TicketDetails() {
     }
   };
 
+
+  // ==========================================
+  // LOAD ACTIVITIES
+  // ==========================================
+
   const loadActivities = async () => {
     try {
       const data = await api.get(
         `/ticket-activities/${id}`
       );
 
-      setActivities(data.activities || []);
+      setActivities(
+        data.activities || []
+      );
+
     } catch (error) {
       console.error(
         "Activities error:",
@@ -71,6 +101,11 @@ function TicketDetails() {
     }
   };
 
+
+  // ==========================================
+  // LOAD AGENTS
+  // ==========================================
+
   const loadAgents = async () => {
     try {
       const data = await api.get(
@@ -78,6 +113,7 @@ function TicketDetails() {
       );
 
       setAgents(data.agents || []);
+
     } catch (error) {
       console.error(
         "Agents error:",
@@ -85,6 +121,11 @@ function TicketDetails() {
       );
     }
   };
+
+
+  // ==========================================
+  // LOAD EVERYTHING
+  // ==========================================
 
   useEffect(() => {
     const loadAll = async () => {
@@ -98,13 +139,389 @@ function TicketDetails() {
           loadActivities(),
           loadAgents(),
         ]);
+
       } finally {
         setLoading(false);
       }
     };
 
     loadAll();
+
   }, [id]);
+
+
+  // ==========================================
+  // ANALYZE TICKET WITH AI
+  // ==========================================
+
+  const handleAnalyzeWithAI = async () => {
+    if (!ticket) return;
+
+    try {
+      setAiLoading(true);
+      setAiError("");
+      setError("");
+      setSuccess("");
+
+      const data = await api.post(
+        "/ai/analyze-ticket",
+        {
+          title: ticket.title,
+          description: ticket.description,
+        }
+      );
+
+      setAiAnalysis(data.analysis);
+
+      setSuccess(
+        "AI analysis completed successfully."
+      );
+
+    } catch (error) {
+      console.error(
+        "AI analysis error:",
+        error
+      );
+
+      setAiError(
+        error.message ||
+          "Failed to analyze ticket with AI"
+      );
+
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+
+  // ==========================================
+  // NORMALIZE AI CATEGORY
+  // ==========================================
+
+  const normalizeCategory = (category) => {
+    if (!category) {
+      return "general";
+    }
+
+    const value = category
+      .toString()
+      .trim()
+      .toLowerCase();
+
+
+    // Technical
+
+    if (
+      value === "technical" ||
+      value.includes("technical") ||
+      value.includes("technical support") ||
+      value.includes("bug") ||
+      value.includes("software") ||
+      value.includes("hardware") ||
+      value.includes("system") ||
+      value.includes("error") ||
+      value.includes("issue")
+    ) {
+      return "technical";
+    }
+
+
+    // Billing
+
+    if (
+      value === "billing" ||
+      value.includes("billing") ||
+      value.includes("payment") ||
+      value.includes("invoice") ||
+      value.includes("refund") ||
+      value.includes("charge") ||
+      value.includes("subscription")
+    ) {
+      return "billing";
+    }
+
+
+    // Account
+
+    if (
+      value === "account" ||
+      value.includes("account") ||
+      value.includes("login") ||
+      value.includes("password") ||
+      value.includes("profile") ||
+      value.includes("registration") ||
+      value.includes("sign in") ||
+      value.includes("signin")
+    ) {
+      return "account";
+    }
+
+
+    // Other
+
+    if (
+      value === "other" ||
+      value.includes("other")
+    ) {
+      return "other";
+    }
+
+
+    // General
+
+    if (
+      value === "general" ||
+      value.includes("general") ||
+      value.includes("inquiry") ||
+      value.includes("question") ||
+      value.includes("information")
+    ) {
+      return "general";
+    }
+
+
+    return "general";
+  };
+
+
+  // ==========================================
+  // NORMALIZE AI PRIORITY
+  // ==========================================
+
+  const normalizePriority = (
+    priorityValue
+  ) => {
+    if (!priorityValue) {
+      return "medium";
+    }
+
+    const value = priorityValue
+      .toString()
+      .trim()
+      .toLowerCase();
+
+
+    if (
+      value.includes("urgent") ||
+      value.includes("critical") ||
+      value.includes("emergency")
+    ) {
+      return "urgent";
+    }
+
+
+    if (
+      value.includes("high") ||
+      value.includes("important")
+    ) {
+      return "high";
+    }
+
+
+    if (
+      value.includes("low") ||
+      value.includes("minor")
+    ) {
+      return "low";
+    }
+
+
+    if (
+      value.includes("medium") ||
+      value.includes("moderate") ||
+      value.includes("normal")
+    ) {
+      return "medium";
+    }
+
+
+    return "medium";
+  };
+
+
+  // ==========================================
+  // APPLY AI RECOMMENDATION
+  // ==========================================
+
+  const handleApplyAIRecommendation =
+    async () => {
+      if (!aiAnalysis) {
+        setError(
+          "Please analyze the ticket with AI first."
+        );
+        return;
+      }
+
+      try {
+        setAiApplyLoading(true);
+        setError("");
+        setAiError("");
+        setSuccess("");
+
+
+        const recommendedPriority =
+          normalizePriority(
+            aiAnalysis.priority
+          );
+
+
+        const recommendedCategory =
+          normalizeCategory(
+            aiAnalysis.category
+          );
+
+
+        console.log(
+          "AI ORIGINAL RECOMMENDATION:",
+          {
+            priority:
+              aiAnalysis.priority,
+
+            category:
+              aiAnalysis.category,
+          }
+        );
+
+
+        console.log(
+          "NORMALIZED RECOMMENDATION:",
+          {
+            priority:
+              recommendedPriority,
+
+            category:
+              recommendedCategory,
+          }
+        );
+
+
+        const data = await api.patch(
+          `/ai/tickets/${id}/apply-recommendation`,
+          {
+            priority:
+              recommendedPriority,
+
+            category:
+              recommendedCategory,
+
+              recommended_status:
+                   aiAnalysis.recommended_status,
+          }
+        );
+
+
+        setTicket(data.ticket);
+
+        setPriority(
+          data.ticket.priority
+        );
+
+
+        setSuccess(
+          data.message ||
+            "AI recommendation applied successfully"
+        );
+
+
+        await loadActivities();
+
+      } catch (error) {
+        console.error(
+          "Apply AI recommendation error:",
+          error
+        );
+
+        setError(
+          error.message ||
+            "Failed to apply AI recommendation"
+        );
+
+      } finally {
+        setAiApplyLoading(false);
+      }
+    };
+
+
+  // ==========================================
+  // USE AI REPLY
+  // ==========================================
+
+  const handleUseAIReply = () => {
+    if (!aiAnalysis?.suggested_reply) {
+      return;
+    }
+
+    setComment(
+      aiAnalysis.suggested_reply
+    );
+
+    setSuccess(
+      "AI reply added to comment box. Review it before sending."
+    );
+
+
+    setTimeout(() => {
+      const commentSection =
+        document.getElementById(
+          "comment-section"
+        );
+
+      if (commentSection) {
+        commentSection.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      }
+    }, 100);
+  };
+
+
+  // ==========================================
+  // COPY AI REPLY
+  // ==========================================
+
+  const handleCopyAIReply = async () => {
+    if (!aiAnalysis?.suggested_reply) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(
+        aiAnalysis.suggested_reply
+      );
+
+      setSuccess(
+        "AI reply copied to clipboard."
+      );
+
+    } catch (error) {
+      console.error(
+        "Copy AI reply error:",
+        error
+      );
+
+      setAiError(
+        "Failed to copy AI reply."
+      );
+    }
+  };
+
+
+  // ==========================================
+  // REGENERATE AI REPLY
+  // ==========================================
+
+  const handleRegenerateAIReply =
+    async () => {
+      if (!ticket) return;
+
+      await handleAnalyzeWithAI();
+    };
+
+
+  // ==========================================
+  // UPDATE TICKET
+  // ==========================================
 
   const handleUpdateTicket = async () => {
     try {
@@ -127,6 +544,7 @@ function TicketDetails() {
       );
 
       await loadActivities();
+
     } catch (error) {
       setError(
         error.message ||
@@ -134,6 +552,11 @@ function TicketDetails() {
       );
     }
   };
+
+
+  // ==========================================
+  // ASSIGN TICKET
+  // ==========================================
 
   const handleAssignTicket = async (
     agentId
@@ -146,7 +569,9 @@ function TicketDetails() {
 
       const data = await api.put(
         `/tickets/${id}/assign`,
-        { agentId }
+        {
+          agentId,
+        }
       );
 
       setTicket(data.ticket);
@@ -157,6 +582,7 @@ function TicketDetails() {
       );
 
       await loadActivities();
+
     } catch (error) {
       setError(
         error.message ||
@@ -165,10 +591,17 @@ function TicketDetails() {
     }
   };
 
+
+  // ==========================================
+  // ADD COMMENT
+  // ==========================================
+
   const handleAddComment = async (e) => {
     e.preventDefault();
 
-    if (!comment.trim()) return;
+    if (!comment.trim()) {
+      return;
+    }
 
     try {
       setError("");
@@ -195,6 +628,7 @@ function TicketDetails() {
       );
 
       await loadActivities();
+
     } catch (error) {
       setError(
         error.message ||
@@ -203,17 +637,27 @@ function TicketDetails() {
     }
   };
 
+
+  // ==========================================
+  // DELETE TICKET
+  // ==========================================
+
   const handleDeleteTicket = async () => {
     const confirmed = window.confirm(
       "Are you sure you want to delete this ticket?"
     );
 
-    if (!confirmed) return;
+    if (!confirmed) {
+      return;
+    }
 
     try {
-      await api.delete(`/tickets/${id}`);
+      await api.delete(
+        `/tickets/${id}`
+      );
 
       navigate("/tickets");
+
     } catch (error) {
       setError(
         error.message ||
@@ -222,29 +666,46 @@ function TicketDetails() {
     }
   };
 
+
+  // ==========================================
+  // LOADING
+  // ==========================================
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-950 text-white">
+
         <Sidebar />
 
         <main className="ml-0 min-h-screen lg:ml-64">
+
           <div className="flex min-h-screen items-center justify-center pt-16 lg:pt-0">
             Loading ticket...
           </div>
+
         </main>
+
       </div>
     );
   }
 
+
+  // ==========================================
+  // TICKET NOT FOUND
+  // ==========================================
+
   if (!ticket) {
     return (
       <div className="min-h-screen bg-slate-950 text-white">
+
         <Sidebar />
 
         <main className="ml-0 min-h-screen lg:ml-64">
+
           <div className="flex min-h-screen items-center justify-center pt-16 lg:pt-0">
 
             <div className="text-center">
+
               <h1 className="text-2xl font-bold">
                 Ticket not found
               </h1>
@@ -257,13 +718,21 @@ function TicketDetails() {
               >
                 Back to Tickets
               </button>
+
             </div>
 
           </div>
+
         </main>
+
       </div>
     );
   }
+
+
+  // ==========================================
+  // MAIN UI
+  // ==========================================
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
@@ -274,6 +743,11 @@ function TicketDetails() {
 
         <div className="mx-auto max-w-6xl px-4 py-8 pt-20 sm:px-6 lg:px-8 lg:pt-8">
 
+
+          {/* ==========================================
+              BACK
+          ========================================== */}
+
           <button
             onClick={() =>
               navigate("/tickets")
@@ -283,9 +757,15 @@ function TicketDetails() {
             ← Back to Tickets
           </button>
 
+
+          {/* ==========================================
+              HEADER
+          ========================================== */}
+
           <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
 
             <div>
+
               <p className="text-sm text-slate-500">
                 Ticket Details
               </p>
@@ -293,7 +773,9 @@ function TicketDetails() {
               <h1 className="mt-1 text-3xl font-bold">
                 {ticket.title}
               </h1>
+
             </div>
+
 
             <div className="flex flex-wrap gap-3">
 
@@ -305,9 +787,26 @@ function TicketDetails() {
                 {ticket.priority}
               </span>
 
+              {ticket.category && (
+                <span className="rounded-full bg-purple-500/10 px-4 py-2 text-sm capitalize text-purple-400">
+                  {ticket.category}
+                </span>
+              )}
+
+              {ticket.sentiment && (
+                <span className="rounded-full bg-pink-500/10 px-4 py-2 text-sm capitalize text-pink-400">
+                  {ticket.sentiment}
+                </span>
+              )}
+
             </div>
 
           </div>
+
+
+          {/* ==========================================
+              ERROR
+          ========================================== */}
 
           {error && (
             <div className="mb-5 rounded-xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-red-400">
@@ -315,13 +814,21 @@ function TicketDetails() {
             </div>
           )}
 
+
+          {/* ==========================================
+              SUCCESS
+          ========================================== */}
+
           {success && (
             <div className="mb-5 rounded-xl border border-green-500/30 bg-green-500/10 px-5 py-4 text-green-400">
               {success}
             </div>
           )}
 
-          {/* TICKET INFO */}
+
+          {/* ==========================================
+              TICKET INFO
+          ========================================== */}
 
           <section className="rounded-2xl border border-white/10 bg-slate-900 p-6">
 
@@ -332,6 +839,7 @@ function TicketDetails() {
             <p className="mt-4 leading-7 text-slate-400">
               {ticket.description}
             </p>
+
 
             <div className="mt-8 grid gap-4 md:grid-cols-2">
 
@@ -351,6 +859,7 @@ function TicketDetails() {
                 </p>
 
               </div>
+
 
               <div className="rounded-xl border border-white/10 bg-slate-950 p-5">
 
@@ -373,7 +882,325 @@ function TicketDetails() {
 
           </section>
 
-          {/* UPDATE */}
+
+          {/* ==========================================
+              AI SUPPORT
+          ========================================== */}
+
+          <section className="mt-8 rounded-2xl border border-cyan-500/20 bg-slate-900 p-6">
+
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+
+              <div>
+
+                <p className="text-sm font-medium text-cyan-400">
+                  AI ASSIST
+                </p>
+
+                <h2 className="mt-1 text-xl font-semibold">
+                  SupportSphereAI
+                </h2>
+
+                <p className="mt-2 text-sm text-slate-400">
+                  Analyze this ticket and get an AI-powered
+                  summary, category, priority, sentiment,
+                  resolution, and suggested reply.
+                </p>
+
+              </div>
+
+
+              <button
+                type="button"
+                onClick={handleAnalyzeWithAI}
+                disabled={aiLoading}
+                className="shrink-0 rounded-xl bg-cyan-500 px-5 py-3 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {aiLoading
+                  ? "Analyzing..."
+                  : "✨ Analyze with AI"}
+              </button>
+
+            </div>
+
+
+            {/* ==========================================
+                AI ERROR
+            ========================================== */}
+
+            {aiError && (
+              <div className="mt-5 rounded-xl border border-red-500/30 bg-red-500/10 px-5 py-4 text-sm text-red-400">
+                {aiError}
+              </div>
+            )}
+
+
+            {/* ==========================================
+                AI RESULT
+            ========================================== */}
+
+            {aiAnalysis && (
+              <div className="mt-6 space-y-5">
+
+
+                {/* ==========================================
+                    SUMMARY
+                ========================================== */}
+
+                <div className="rounded-xl border border-white/10 bg-slate-950 p-5">
+
+                  <p className="text-sm text-slate-500">
+                    Summary
+                  </p>
+
+                  <p className="mt-2 leading-7 text-slate-300">
+                    {aiAnalysis.summary ||
+                      "No summary available."}
+                  </p>
+
+                </div>
+
+
+                {/* ==========================================
+                    METADATA
+                ========================================== */}
+
+                <div className="grid gap-4 md:grid-cols-3">
+
+                  <div className="rounded-xl border border-white/10 bg-slate-950 p-5">
+
+                    <p className="text-sm text-slate-500">
+                      Category
+                    </p>
+
+                    <p className="mt-2 font-semibold capitalize text-cyan-400">
+                      {aiAnalysis.category ||
+                        "General"}
+                    </p>
+
+                  </div>
+
+
+                  <div className="rounded-xl border border-white/10 bg-slate-950 p-5">
+
+                    <p className="text-sm text-slate-500">
+                      AI Priority
+                    </p>
+
+                    <p className="mt-2 font-semibold capitalize text-cyan-400">
+                      {aiAnalysis.priority ||
+                        "Medium"}
+                    </p>
+
+                  </div>
+
+
+                  <div className="rounded-xl border border-white/10 bg-slate-950 p-5">
+
+                    <p className="text-sm text-slate-500">
+                      Sentiment
+                    </p>
+
+                    <p className="mt-2 font-semibold capitalize text-cyan-400">
+                      {aiAnalysis.sentiment ||
+                        "Neutral"}
+                    </p>
+
+                  </div>
+
+                </div>
+
+
+                {/* ==========================================
+                    APPLY AI RECOMMENDATION
+                ========================================== */}
+
+                <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-5">
+
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+
+                    <div>
+
+                      <p className="font-semibold text-white">
+                        AI Recommendation
+                      </p>
+
+                      <p className="mt-1 text-sm text-slate-400">
+                        Apply the AI-suggested category and
+                        priority to this ticket.
+                      </p>
+
+
+                      <div className="mt-3 flex flex-wrap gap-2">
+
+                        <span className="rounded-full bg-cyan-500/10 px-3 py-1 text-xs font-medium capitalize text-cyan-400">
+                          Category:{" "}
+                          {normalizeCategory(
+                            aiAnalysis.category
+                          )}
+                        </span>
+
+
+                        <span className="rounded-full bg-cyan-500/10 px-3 py-1 text-xs font-medium capitalize text-cyan-400">
+                          Priority:{" "}
+                          {normalizePriority(
+                            aiAnalysis.priority
+                          )}
+                        </span>
+
+                      <span className="rounded-full bg-cyan-500/10 px-3 py-1 text-xs font-medium capitalize text-cyan-400">
+                             Status:{" "}
+                            {aiAnalysis.recommended_status ||
+                                        "in-progress"}
+                                  </span>
+
+                      </div>
+
+                    </div>
+
+
+                    <button
+                      type="button"
+                      onClick={
+                        handleApplyAIRecommendation
+                      }
+                      disabled={aiApplyLoading}
+                      className="shrink-0 rounded-xl bg-cyan-500 px-5 py-3 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {aiApplyLoading
+                        ? "Applying..."
+                        : "✓ Apply AI Recommendation"}
+                    </button>
+
+                  </div>
+
+                </div>
+
+
+                {/* ==========================================
+                    RESOLUTION
+                ========================================== */}
+
+                <div className="rounded-xl border border-white/10 bg-slate-950 p-5">
+
+                  <p className="text-sm text-slate-500">
+                    AI Resolution
+                  </p>
+
+                  <p className="mt-2 leading-7 text-slate-300">
+                    {aiAnalysis.resolution ||
+                      "No resolution available."}
+                  </p>
+
+                </div>
+
+
+                {/* ==========================================
+                    SUGGESTED REPLY
+                ========================================== */}
+
+                <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-5">
+
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+
+                    <div>
+
+                      <p className="text-sm font-semibold text-cyan-400">
+                        🤖 Suggested Reply
+                      </p>
+
+                      <p className="mt-1 text-xs text-slate-500">
+                        AI-generated response for the customer
+                      </p>
+
+                    </div>
+
+
+                    {/* ==========================================
+                        AI REPLY ACTIONS
+                    ========================================== */}
+
+                    <div className="flex flex-wrap gap-2">
+
+                      {/* COPY */}
+
+                      <button
+                        type="button"
+                        onClick={
+                          handleCopyAIReply
+                        }
+                        disabled={
+                          !aiAnalysis?.suggested_reply
+                        }
+                        className="rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        📋 Copy
+                      </button>
+
+
+                      {/* USE */}
+
+                      <button
+                        type="button"
+                        onClick={
+                          handleUseAIReply
+                        }
+                        disabled={
+                          !aiAnalysis?.suggested_reply
+                        }
+                        className="rounded-lg bg-cyan-500 px-3 py-2 text-xs font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        ✨ Use AI Reply
+                      </button>
+
+
+                      {/* REGENERATE */}
+
+                      <button
+                        type="button"
+                        onClick={
+                          handleRegenerateAIReply
+                        }
+                        disabled={aiLoading}
+                        className="rounded-lg border border-cyan-500/30 px-3 py-2 text-xs font-semibold text-cyan-400 transition hover:bg-cyan-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {aiLoading
+                          ? "Generating..."
+                          : "🔄 Regenerate"}
+                      </button>
+
+                    </div>
+
+                  </div>
+
+
+                  {/* REPLY */}
+
+                  <div className="mt-4 rounded-xl border border-white/10 bg-slate-950 p-4">
+
+                    <p className="whitespace-pre-wrap leading-7 text-slate-300">
+                      {aiAnalysis.suggested_reply ||
+                        "No suggested reply available."}
+                    </p>
+
+                  </div>
+
+
+                  <p className="mt-3 text-xs text-slate-500">
+                    Review the AI-generated response before sending it to the customer.
+                  </p>
+
+                </div>
+
+              </div>
+            )}
+
+          </section>
+
+
+          {/* ==========================================
+              UPDATE TICKET
+          ========================================== */}
 
           <section className="mt-8 rounded-2xl border border-white/10 bg-slate-900 p-6">
 
@@ -381,9 +1208,13 @@ function TicketDetails() {
               Update Ticket
             </h2>
 
+
             <div className="mt-5 grid gap-5 md:grid-cols-3">
 
+              {/* STATUS */}
+
               <div>
+
                 <label className="mb-2 block text-sm text-slate-400">
                   Status
                 </label>
@@ -395,6 +1226,7 @@ function TicketDetails() {
                   }
                   className="w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3"
                 >
+
                   <option value="open">
                     Open
                   </option>
@@ -410,10 +1242,16 @@ function TicketDetails() {
                   <option value="closed">
                     Closed
                   </option>
+
                 </select>
+
               </div>
 
+
+              {/* PRIORITY */}
+
               <div>
+
                 <label className="mb-2 block text-sm text-slate-400">
                   Priority
                 </label>
@@ -425,6 +1263,7 @@ function TicketDetails() {
                   }
                   className="w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3"
                 >
+
                   <option value="low">
                     Low
                   </option>
@@ -440,13 +1279,20 @@ function TicketDetails() {
                   <option value="urgent">
                     Urgent
                   </option>
+
                 </select>
+
               </div>
+
+
+              {/* SAVE */}
 
               <div className="flex items-end">
 
                 <button
-                  onClick={handleUpdateTicket}
+                  onClick={
+                    handleUpdateTicket
+                  }
                   className="w-full rounded-xl bg-cyan-500 px-5 py-3 font-semibold text-slate-950"
                 >
                   Save Changes
@@ -458,7 +1304,10 @@ function TicketDetails() {
 
           </section>
 
-          {/* ASSIGN */}
+
+          {/* ==========================================
+              ASSIGN
+          ========================================== */}
 
           {user?.role === "admin" && (
             <section className="mt-8 rounded-2xl border border-white/10 bg-slate-900 p-6">
@@ -478,6 +1327,7 @@ function TicketDetails() {
                 }
                 className="mt-5 w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3"
               >
+
                 <option value="">
                   Select Agent
                 </option>
@@ -491,18 +1341,26 @@ function TicketDetails() {
                     {agent.email}
                   </option>
                 ))}
+
               </select>
 
             </section>
           )}
 
-          {/* COMMENTS */}
 
-          <section className="mt-8 rounded-2xl border border-white/10 bg-slate-900 p-6">
+          {/* ==========================================
+              COMMENTS
+          ========================================== */}
+
+          <section
+            id="comment-section"
+            className="mt-8 rounded-2xl border border-white/10 bg-slate-900 p-6"
+          >
 
             <h2 className="text-xl font-semibold">
               Comments
             </h2>
+
 
             <form
               onSubmit={handleAddComment}
@@ -512,30 +1370,50 @@ function TicketDetails() {
               <textarea
                 value={comment}
                 onChange={(e) =>
-                  setComment(e.target.value)
+                  setComment(
+                    e.target.value
+                  )
                 }
                 placeholder="Write a comment..."
-                rows="4"
+                rows="5"
                 className="w-full resize-none rounded-xl border border-white/10 bg-slate-950 px-4 py-3"
               />
 
-              <button
-                type="submit"
-                className="mt-3 rounded-xl bg-cyan-500 px-5 py-3 font-semibold text-slate-950"
-              >
-                Add Comment
-              </button>
+
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+
+                <p className="text-xs text-slate-500">
+                  You can edit the AI reply before sending.
+                </p>
+
+
+                <button
+                  type="submit"
+                  disabled={!comment.trim()}
+                  className="rounded-xl bg-cyan-500 px-5 py-3 font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Add Comment
+                </button>
+
+              </div>
 
             </form>
+
+
+            {/* COMMENTS LIST */}
 
             <div className="mt-8 divide-y divide-white/10">
 
               {comments.length === 0 ? (
+
                 <p className="py-6 text-slate-500">
                   No comments yet.
                 </p>
+
               ) : (
+
                 comments.map((item) => (
+
                   <div
                     key={item._id}
                     className="py-5"
@@ -556,19 +1434,24 @@ function TicketDetails() {
 
                     </div>
 
-                    <p className="mt-2 text-slate-400">
+                    <p className="mt-2 whitespace-pre-wrap text-slate-400">
                       {item.message}
                     </p>
 
                   </div>
+
                 ))
+
               )}
 
             </div>
 
           </section>
 
-          {/* ACTIVITIES */}
+
+          {/* ==========================================
+              ACTIVITIES
+          ========================================== */}
 
           <section className="mt-8 rounded-2xl border border-white/10 bg-slate-900 p-6">
 
@@ -576,51 +1459,70 @@ function TicketDetails() {
               Activity
             </h2>
 
+
             <div className="mt-5 divide-y divide-white/10">
 
               {activities.length === 0 ? (
+
                 <p className="py-6 text-slate-500">
                   No activity yet.
                 </p>
+
               ) : (
+
                 activities.map(
                   (activity) => (
+
                     <div
                       key={activity._id}
                       className="py-4"
                     >
 
                       <p className="text-sm">
+
                         <span className="font-semibold">
                           {activity.user?.name ||
                             "User"}
                         </span>{" "}
+
                         {activity.description}
+
                       </p>
 
+
                       <p className="mt-1 text-xs text-slate-500">
+
                         {activity.action} ·{" "}
+
                         {new Date(
                           activity.createdAt
                         ).toLocaleString()}
+
                       </p>
 
                     </div>
+
                   )
                 )
+
               )}
 
             </div>
 
           </section>
 
-          {/* DELETE */}
+
+          {/* ==========================================
+              DELETE
+          ========================================== */}
 
           {user?.role === "admin" && (
             <div className="mt-8 flex justify-end">
 
               <button
-                onClick={handleDeleteTicket}
+                onClick={
+                  handleDeleteTicket
+                }
                 className="rounded-xl border border-red-500/30 px-5 py-3 text-red-400 hover:bg-red-500/10"
               >
                 Delete Ticket
@@ -636,5 +1538,6 @@ function TicketDetails() {
     </div>
   );
 }
+
 
 export default TicketDetails;

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 import api from "../services/api";
 
+
 function Dashboard() {
   const navigate = useNavigate();
 
@@ -16,6 +17,7 @@ function Dashboard() {
   const user = JSON.parse(
     localStorage.getItem("user") || "null"
   );
+
 
   // ==========================================
   // LOAD DASHBOARD
@@ -46,6 +48,7 @@ function Dashboard() {
         setRecentActivities(
           activitiesData.activities || []
         );
+
       } catch (error) {
         console.error(
           "Dashboard error:",
@@ -56,6 +59,7 @@ function Dashboard() {
           error.message ||
             "Failed to load dashboard"
         );
+
       } finally {
         setLoading(false);
       }
@@ -63,6 +67,7 @@ function Dashboard() {
 
     loadDashboard();
   }, []);
+
 
   // ==========================================
   // LOADING
@@ -89,6 +94,7 @@ function Dashboard() {
       </div>
     );
   }
+
 
   // ==========================================
   // ERROR
@@ -124,14 +130,39 @@ function Dashboard() {
     );
   }
 
+
   // ==========================================
   // STATS
   // ==========================================
 
-  const ticketStats = stats?.tickets || {};
-  const priorityStats = stats?.priority || {};
-  const customerStats = stats?.customers || {};
-  const agentStats = stats?.agents || {};
+  const ticketStats =
+    stats?.tickets || {};
+
+  const priorityStats =
+    stats?.priority || {};
+
+  const customerStats =
+    stats?.customers || {};
+
+  const agentStats =
+    stats?.agents || {};
+
+  // ==========================================
+  // AI INSIGHTS
+  // ==========================================
+
+  const aiInsights =
+    stats?.aiInsights || {};
+
+  const aiCategories =
+    aiInsights.categories || {};
+
+  const aiSentiment =
+    aiInsights.sentiment || {};
+
+  const smartAlerts =
+    aiInsights.smartAlerts || 0;
+
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
@@ -141,6 +172,7 @@ function Dashboard() {
       <main className="ml-0 min-h-screen lg:ml-64">
 
         <div className="mx-auto max-w-7xl px-4 py-8 pt-20 sm:px-6 lg:px-8 lg:pt-8">
+
 
           {/* ==========================================
               WELCOME
@@ -247,6 +279,182 @@ function Dashboard() {
                   (priorityStats.urgent || 0)
                 }
               />
+
+            </div>
+
+          </section>
+
+
+          {/* ==========================================
+              AI INSIGHTS
+          ========================================== */}
+
+          <section className="mt-10">
+
+            <div className="mb-4">
+
+              <p className="text-sm text-cyan-400">
+                SupportSphereAI
+              </p>
+
+              <h2 className="mt-1 text-xl font-semibold">
+                AI Insights
+              </h2>
+
+              <p className="mt-1 text-sm text-slate-500">
+                AI-powered overview of your support tickets.
+              </p>
+
+            </div>
+
+
+            {/* SMART ALERT */}
+
+            <div
+              className={`mb-5 rounded-2xl border p-5 ${
+                smartAlerts > 0
+                  ? "border-red-500/30 bg-red-500/5"
+                  : "border-emerald-500/30 bg-emerald-500/5"
+              }`}
+            >
+
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+
+                <div>
+
+                  <p className="text-sm text-slate-400">
+                    AI Smart Alerts
+                  </p>
+
+                  <p
+                    className={`mt-1 text-2xl font-bold ${
+                      smartAlerts > 0
+                        ? "text-red-400"
+                        : "text-emerald-400"
+                    }`}
+                  >
+                    {smartAlerts}
+                  </p>
+
+                  <p className="mt-1 text-sm text-slate-500">
+                    {smartAlerts > 0
+                      ? "Tickets need immediate attention."
+                      : "No urgent AI alerts right now."
+                    }
+                  </p>
+
+                </div>
+
+                <div className="text-3xl">
+                  {smartAlerts > 0
+                    ? "🚨"
+                    : "✓"}
+                </div>
+
+              </div>
+
+            </div>
+
+
+            {/* SENTIMENT */}
+
+            <div className="mb-5">
+
+              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-400">
+                Customer Sentiment
+              </h3>
+
+              <div className="grid gap-4 sm:grid-cols-3">
+
+                <AIInsightCard
+                  title="Positive"
+                  value={
+                    aiSentiment.positive || 0
+                  }
+                  icon="😊"
+                  text="Positive customer sentiment"
+                />
+
+                <AIInsightCard
+                  title="Neutral"
+                  value={
+                    aiSentiment.neutral || 0
+                  }
+                  icon="😐"
+                  text="Neutral customer sentiment"
+                />
+
+                <AIInsightCard
+                  title="Negative"
+                  value={
+                    aiSentiment.negative || 0
+                  }
+                  icon="😡"
+                  text="Negative customer sentiment"
+                  danger
+                />
+
+              </div>
+
+            </div>
+
+
+            {/* CATEGORIES */}
+
+            <div>
+
+              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-400">
+                AI Ticket Categories
+              </h3>
+
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+
+                <AIInsightCard
+                  title="Technical"
+                  value={
+                    aiCategories.technical || 0
+                  }
+                  icon="🛠️"
+                  text="Technical issues"
+                />
+
+                <AIInsightCard
+                  title="Billing"
+                  value={
+                    aiCategories.billing || 0
+                  }
+                  icon="💳"
+                  text="Billing issues"
+                />
+
+                <AIInsightCard
+                  title="Account"
+                  value={
+                    aiCategories.account || 0
+                  }
+                  icon="👤"
+                  text="Account issues"
+                />
+
+                <AIInsightCard
+                  title="General"
+                  value={
+                    aiCategories.general || 0
+                  }
+                  icon="📌"
+                  text="General inquiries"
+                />
+
+                <AIInsightCard
+                  title="Other"
+                  value={
+                    aiCategories.other || 0
+                  }
+                  icon="📦"
+                  text="Other issues"
+                />
+
+              </div>
 
             </div>
 
@@ -377,7 +585,7 @@ function Dashboard() {
                           </div>
 
 
-                          {/* Status + Priority + Open */}
+                          {/* Status + Priority + AI */}
 
                           <div className="flex flex-wrap items-center gap-3">
 
@@ -388,6 +596,18 @@ function Dashboard() {
                             <span className="rounded-full bg-cyan-500/10 px-3 py-1 text-xs capitalize text-cyan-400">
                               {ticket.priority}
                             </span>
+
+                            {ticket.sentiment && (
+                              <span className="rounded-full bg-purple-500/10 px-3 py-1 text-xs capitalize text-purple-400">
+                                {ticket.sentiment}
+                              </span>
+                            )}
+
+                            {ticket.category && (
+                              <span className="rounded-full bg-white/5 px-3 py-1 text-xs capitalize text-slate-400">
+                                {ticket.category}
+                              </span>
+                            )}
 
                             {/* OPEN BUTTON */}
 
@@ -540,5 +760,61 @@ function InfoCard({
     </div>
   );
 }
+
+
+// ==========================================
+// AI INSIGHT CARD
+// ==========================================
+
+function AIInsightCard({
+  title,
+  value,
+  icon,
+  text,
+  danger = false,
+}) {
+  return (
+    <div
+      className={`rounded-2xl border p-5 ${
+        danger
+          ? "border-red-500/20 bg-red-500/5"
+          : "border-white/10 bg-slate-900"
+      }`}
+    >
+
+      <div className="flex items-start justify-between">
+
+        <div>
+
+          <p className="text-sm text-slate-400">
+            {title}
+          </p>
+
+          <p
+            className={`mt-2 text-3xl font-bold ${
+              danger
+                ? "text-red-400"
+                : "text-cyan-400"
+            }`}
+          >
+            {value}
+          </p>
+
+        </div>
+
+        <span className="text-2xl">
+          {icon}
+        </span>
+
+      </div>
+
+      <p className="mt-2 text-xs text-slate-500">
+        {text}
+      </p>
+
+    </div>
+  );
+}
+
 
 export default Dashboard;

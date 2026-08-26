@@ -9,6 +9,7 @@ const commentRoutes = require("./routes/commentRoutes");
 const ticketActivityRoutes = require("./routes/ticketActivityRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
+const aiRoutes = require("./routes/aiRoutes");
 
 const app = express();
 
@@ -80,6 +81,11 @@ app.use(
 app.use(
   "/api/dashboard",
   dashboardRoutes
+);
+
+app.use(
+  "/api/ai",
+  aiRoutes
 );
 
 
