@@ -16,14 +16,32 @@ const app = express();
 
 // ==========================================
 // MIDDLEWARE
-// ==========================================
+// =========================================
+
+const allowedOrigins = [
+  "http://localhost:3000",
+  "https://supportsphereai-frontend.onrender.com",
+];
 
 app.use(
   cors({
-    origin: true,
+    origin: (origin, callback) => {
+      // Allow requests without an Origin header
+      // (Postman, server-to-server requests, etc.)
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error("Not allowed by CORS"));
+    },
     credentials: true,
   })
 );
+
 
 app.use(express.json());
 
@@ -35,6 +53,14 @@ app.use(express.json());
 app.get("/", (req, res) => {
   res.status(200).json({
     message: "SupportSphere API is running 🚀",
+  });
+});
+
+
+
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    status: "healthy",
   });
 });
 
