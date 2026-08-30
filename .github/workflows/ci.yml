@@ -144,7 +144,7 @@ jobs:
         run: curl -X POST "${{ secrets.RENDER_BACKEND_DEPLOY_HOOK }}"
 
 
-              - name: Deploy AI Service to Render
+      - name: Deploy AI Service to Render
         if: success()
         run: curl -X POST "${{ secrets.RENDER_AI_DEPLOY_HOOK }}"
 
