@@ -16,7 +16,7 @@ app.include_router(router)
 @app.get("/")
 async def root():
     return {
-        "message": "SupportSphereAI is running"
+        "message": "SupportSphereAI is running and working"
     }
 
 
