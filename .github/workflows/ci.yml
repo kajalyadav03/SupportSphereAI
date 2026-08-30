@@ -9,16 +9,10 @@ on:
     branches:
       - main
 
-
 jobs:
-
-  # ==========================================
-  # FRONTEND
-  # ==========================================
 
   frontend:
     name: Frontend Build
-
     runs-on: ubuntu-latest
 
     defaults:
@@ -26,7 +20,6 @@ jobs:
         working-directory: frontend
 
     steps:
-
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -44,13 +37,8 @@ jobs:
         run: npm run build
 
 
-  # ==========================================
-  # BACKEND
-  # ==========================================
-
   backend:
     name: Backend Check
-
     runs-on: ubuntu-latest
 
     defaults:
@@ -58,7 +46,6 @@ jobs:
         working-directory: backend
 
     steps:
-
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -76,13 +63,8 @@ jobs:
         run: node --check src/server.js
 
 
-  # ==========================================
-  # AI SERVICE
-  # ==========================================
-
   ai-service:
     name: AI Service Check
-
     runs-on: ubuntu-latest
 
     defaults:
@@ -90,7 +72,6 @@ jobs:
         working-directory: ai-service
 
     steps:
-
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -106,13 +87,8 @@ jobs:
         run: python -m compileall app
 
 
-  # ==========================================
-  # DOCKER
-  # ==========================================
-
   docker:
     name: Docker Build
-
     runs-on: ubuntu-latest
 
     needs:
@@ -121,7 +97,6 @@ jobs:
       - ai-service
 
     steps:
-
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -138,16 +113,11 @@ jobs:
             --build-arg VITE_API_URL=https://supportsphere-backend.onrender.com/api \
             ./frontend
 
-
       - name: Deploy Backend to Render
-        if: success()
         run: curl -X POST "${{ secrets.RENDER_BACKEND_DEPLOY_HOOK }}"
 
-
       - name: Deploy AI Service to Render
-        if: success()
         run: curl -X POST "${{ secrets.RENDER_AI_DEPLOY_HOOK }}"
 
       - name: Deploy Frontend to Render
-        if: success()
         run: curl -X POST "${{ secrets.RENDER_FRONTEND_DEPLOY_HOOK }}"
