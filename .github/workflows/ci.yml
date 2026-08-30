@@ -135,5 +135,19 @@ jobs:
         run: |
           docker build \
             -t supportsphere-frontend \
-            --build-arg VITE_API_URL=http://localhost:5000/api \
+            --build-arg VITE_API_URL=https://supportsphere-backend.onrender.com/api \
             ./frontend
+
+
+      - name: Deploy Backend to Render
+        if: success()
+        run: curl -X POST "${{ secrets.RENDER_BACKEND_DEPLOY_HOOK }}"
+
+
+              - name: Deploy AI Service to Render
+        if: success()
+        run: curl -X POST "${{ secrets.RENDER_AI_DEPLOY_HOOK }}"
+
+      - name: Deploy Frontend to Render
+        if: success()
+        run: curl -X POST "${{ secrets.RENDER_FRONTEND_DEPLOY_HOOK }}"
